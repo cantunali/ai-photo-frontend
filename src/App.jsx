@@ -119,20 +119,23 @@ const App = () => {
       environment: selectedEnvironment
     });
     
-    setProcessedImage(result.processedImageUrl || imageFile);
-    setIsProcessing(false);
+	// N8N'den gelen gerçek resmi göster
+    if (result.processedImageUrl && !result.demo) {
+      setProcessedImage(result.processedImageUrl);
+    } else {
+      setProcessedImage(result.imageUrl || imageFile);
+    }
+	
+	setIsProcessing(false);
     setCurrentStep(5);
   } catch (error) {
     console.error('Process error:', error);
-    // Demo fallback
-    setTimeout(() => {
-      setProcessedImage(imageFile);
-      setIsProcessing(false);
-      setCurrentStep(5);
-    }, 3000);
+    setError('İşlem sırasında hata oluştu');
+    setIsProcessing(false);
   }
 };
-    
+	
+   
     // Demo için simülasyon
    // setTimeout(() => {
    //   // Demo için işlenmiş resim olarak orijinali göster
@@ -218,7 +221,7 @@ const App = () => {
                 </h1>
               </div>
               <div className="text-sm text-gray-500">
-                Demo Mod
+              //  Demo Mod
               </div>
             </div>
           </div>
@@ -620,7 +623,7 @@ const App = () => {
                   />
                   <div className="mt-3 bg-green-50 p-3 rounded-lg text-center">
                     <p className="text-sm text-green-700">
-                      ✓ Demo mod - Gerçek sonuç N8N entegrasyonu ile gelecek
+                       ✓ Fotoğraf başarıyla işlendi
                     </p>
                   </div>
                 </div>
