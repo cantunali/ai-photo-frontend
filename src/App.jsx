@@ -96,16 +96,35 @@ const App = () => {
   };
 
   // İndirme fonksiyonu
-  const downloadImage = () => {
-    if (processedImage) {
+// downloadImage fonksiyonunu güncelleyin (yaklaşık 95. satır):
+const downloadImage = async () => {
+  if (processedImage) {
+    try {
+      // Cloudinary URL'sinden indirme
+      const response = await fetch(processedImage);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `ai-photo-${Date.now()}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      // Hata durumunda direkt link ile indir
       const link = document.createElement('a');
       link.href = processedImage;
-      link.download = `ai-transformed-${Date.now()}.jpg`;
+      link.download = `ai-photo-${Date.now()}.jpg`;
+      link.target = '_blank';
+      link.setAttribute('download', '');
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     }
-  };
+  }
+};
 
   // N8N'e gönderme (Demo)
  const processImage = async () => {
@@ -220,9 +239,7 @@ const App = () => {
                   AI Fotoğraf Dönüştürücü
                 </h1>
               </div>
-              <div className="text-sm text-gray-500">
-              //  Demo Mod
-              </div>
+              
             </div>
           </div>
         </div>
@@ -621,11 +638,7 @@ const App = () => {
                     alt="Processed" 
                     className="w-full rounded-lg shadow-lg"
                   />
-                  <div className="mt-3 bg-green-50 p-3 rounded-lg text-center">
-                    <p className="text-sm text-green-700">
-                       ✓ Fotoğraf başarıyla işlendi
-                    </p>
-                  </div>
+                  
                 </div>
               </div>
 
