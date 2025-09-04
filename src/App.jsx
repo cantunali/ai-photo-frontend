@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { Upload, Camera, ChevronRight, Check, Loader2, Download, ArrowLeft, Sparkles, Palette, MapPin, Image } from 'lucide-react';
 import { uploadImage, processImage as processImageAPI } from './services/api';
 
+// deploy etmek için boş comment
 
 const App = () => {
   const [currentStep, setCurrentStep] = useState(1);
