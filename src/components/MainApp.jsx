@@ -18,11 +18,20 @@ const MainApp = () => {
   const [error, setError] = useState('');
   const [userUsage, setUserUsage] = useState({ used: 0, limit: 5, remaining: 5 });
   const [userRole, setUserRole] = useState('free');
+  const [debugLog, setDebugLog] = useState([]); // Debug log for mobile
   
   // Seçim state'leri
   const [selectedStyle, setSelectedStyle] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
   const [selectedEnvironment, setSelectedEnvironment] = useState('');
+  
+  // Mobile debug logger
+  const addDebugLog = (message, data = null) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `[${timestamp}] ${message}${data ? '\n' + JSON.stringify(data, null, 2) : ''}`;
+    console.log(logEntry);
+    setDebugLog(prev => [...prev.slice(-20), logEntry]); // Keep last 20 logs
+  };
 
   // Stil seçenekleri
   const clothingStyles = [
@@ -82,15 +91,39 @@ const MainApp = () => {
   // Dosya yükleme
   const handleFileUpload = (file) => {
     if (file && file.type.startsWith('image/')) {
+      // Android Chrome uyumluluğu için file size kontrolü
+      if (file.size > 10 * 1024 * 1024) {
+        setError('Dosya boyutu 10MB\'dan büyük olamaz');
+        return;
+      }
+      
+      // Mobil uyumluluk için hem FileReader hem de direkt file object'i sakla
       const reader = new FileReader();
       reader.onload = (e) => {
-        setImageFile(e.target.result);
+        setImageFile({
+          base64: e.target.result,
+          file: file, // Original file object'i de sakla
+          name: file.name,
+          size: file.size,
+          type: file.type
+        });
         setImageUrl('');
         setError('');
+        console.log('File uploaded successfully:', {
+          name: file.name,
+          size: file.size,
+          type: file.type
+        });
       };
+      
+      reader.onerror = (error) => {
+        console.error('FileReader error:', error);
+        setError('Dosya okuma hatası. Lütfen tekrar deneyin.');
+      };
+      
       reader.readAsDataURL(file);
     } else {
-      setError('Lütfen geçerli bir resim dosyası seçin');
+      setError('Lütfen geçerli bir resim dosyası seçin (JPEG, PNG, WebP)');
     }
   };
 
@@ -157,12 +190,32 @@ const MainApp = () => {
     setIsProcessing(true);
     setCurrentStep(4);
     
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    addDebugLog('🚀 Process başladı');
+    addDebugLog('🌐 API URL', { url: API_URL });
+    
     try {
-      const result = await processImageAPI(imageFile, {
+      // Mobil uyumluluk için file object'i öncelikle kullan
+      const imageData = imageFile?.file || imageFile?.base64 || imageFile;
+      addDebugLog('📷 Image data hazır', {
+        hasFile: !!imageFile?.file,
+        hasBase64: !!imageFile?.base64,
+        dataType: typeof imageData
+      });
+      
+      addDebugLog('🎨 Seçimler gönderiliyor', {
+        style: selectedStyle,
+        color: selectedColor,
+        environment: selectedEnvironment
+      });
+      
+      const result = await processImageAPI(imageData, {
         clothingStyle: selectedStyle,
         clothingColor: selectedColor,
         environment: selectedEnvironment
       });
+      
+      addDebugLog('✅ Backend response alındı', result);
       
       // N8N'den gelen gerçek resmi göster
       if (result.processedImageUrl && !result.demo) {
@@ -180,13 +233,18 @@ const MainApp = () => {
       setCurrentStep(5);
     } catch (error) {
       console.error('Process error:', error);
+      addDebugLog('❌ Hata oluştu', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
       
       // Limit aşıldı hatası
       if (error.response?.data?.limitReached) {
         setError(error.response.data.message + ' Premium\'a geçmek için tıklayın.');
         setCurrentStep(3); // Onay sayfasına geri dön
       } else {
-        setError('İşlem sırasında hata oluştu');
+        setError(error.message || 'İşlem sırasında hata oluştu');
       }
       
       setIsProcessing(false);
@@ -356,11 +414,12 @@ const MainApp = () => {
               {/* File Upload */}
               {uploadMethod === 'file' && (
                 <div className="space-y-4">
+                  {/* Drag & Drop Area - Desktop Only */}
                   <div
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
-                    className={`border-3 border-dashed rounded-xl p-12 text-center transition-all
+                    className={`hidden md:block border-3 border-dashed rounded-xl p-12 text-center transition-all
                       ${isDragging 
                         ? 'border-purple-500 bg-purple-50' 
                         : 'border-gray-300 hover:border-purple-400 bg-gray-50'}`}>
@@ -372,23 +431,88 @@ const MainApp = () => {
                       veya
                     </p>
                     
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => handleFileUpload(e.target.files[0])}
+                    className="hidden"
+                    id="fileInput"
+                  />
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                    <label 
+                      htmlFor="fileInput" 
+                      className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium hover:shadow-lg transition-all cursor-pointer w-full sm:w-auto">
+                      <Upload className="w-5 h-5 mr-2" />
+                      Dosya Seç
+                    </label>
+                    
+                    {/* Mobil için Camera Button */}
                     <input
                       type="file"
                       accept="image/*"
+                      capture="user"
                       onChange={(e) => handleFileUpload(e.target.files[0])}
                       className="hidden"
-                      id="fileInput"
+                      id="cameraInput"
                     />
                     <label 
-                      htmlFor="fileInput" 
-                      className="inline-block px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium hover:shadow-lg transition-all cursor-pointer">
-                      <Upload className="w-5 h-5 inline mr-2" />
-                      Dosya Seç
+                      htmlFor="cameraInput" 
+                      className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg font-medium hover:shadow-lg transition-all cursor-pointer w-full sm:w-auto">
+                      <Camera className="w-5 h-5 mr-2" />
+                      Kamera
                     </label>
+                  </div>
                     
                     <p className="text-xs text-gray-500 mt-4">
                       Desteklenen formatlar: JPEG, PNG, WebP (Max: 10MB)
                     </p>
+                  </div>
+                  
+                  {/* Mobile Upload Buttons */}
+                  <div className="md:hidden space-y-4 mt-6">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={(e) => handleFileUpload(e.target.files[0])}
+                      className="hidden"
+                      id="mobileFileInput"
+                    />
+                    
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="user"
+                      onChange={(e) => handleFileUpload(e.target.files[0])}
+                      className="hidden"
+                      id="mobileCameraInput"
+                    />
+                    
+                    <div className="flex flex-col gap-4">
+                      <label 
+                        htmlFor="mobileFileInput" 
+                        className="inline-flex items-center justify-center px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium hover:shadow-lg transition-all cursor-pointer">
+                        <Upload className="w-5 h-5 mr-2" />
+                        📁 Dosya Seç
+                      </label>
+                      
+                      <label 
+                        htmlFor="mobileCameraInput" 
+                        className="inline-flex items-center justify-center px-6 py-4 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg font-medium hover:shadow-lg transition-all cursor-pointer">
+                        <Camera className="w-5 h-5 mr-2" />
+                        📷 Kamera
+                      </label>
+                    </div>
+                    
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <h4 className="font-medium text-blue-800 mb-2">📱 Mobil Kullanım:</h4>
+                      <ul className="text-sm text-blue-700 space-y-1">
+                        <li>• "Dosya Seç" → Galeri'den fotoğraf seçin</li>
+                        <li>• "Kamera" → Direkt fotoğraf çekin</li>
+                        <li>• Chrome'da kamera izni verin</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
               )}
@@ -416,7 +540,7 @@ const MainApp = () => {
                 <div className="mt-6">
                   <h3 className="text-lg font-semibold mb-3">Yüklenen Fotoğraf:</h3>
                   <img 
-                    src={imageFile} 
+                    src={imageFile?.base64 || imageFile} 
                     alt="Yüklenen" 
                     className="w-full max-w-md mx-auto rounded-lg shadow-lg"
                   />
@@ -558,7 +682,7 @@ const MainApp = () => {
                 <div>
                   <h3 className="text-lg font-semibold mb-3">Yüklenen Fotoğraf:</h3>
                   <img 
-                    src={imageFile} 
+                    src={imageFile?.base64 || imageFile} 
                     alt="Preview" 
                     className="w-full rounded-lg shadow-lg"
                   />
@@ -671,7 +795,7 @@ const MainApp = () => {
                 <div>
                   <h3 className="text-lg font-semibold mb-3 text-center">Orijinal</h3>
                   <img 
-                    src={imageFile} 
+                    src={imageFile?.base64 || imageFile} 
                     alt="Original" 
                     className="w-full rounded-lg shadow-lg"
                   />
@@ -701,6 +825,25 @@ const MainApp = () => {
                   🔄 Yeni Fotoğraf
                 </button>
               </div>
+            </div>
+          )}
+          
+          {/* Mobile Debug Log - Only on Mobile */}
+          {debugLog.length > 0 && (
+            <div className="md:hidden mt-6 bg-gray-900 text-green-400 rounded-lg p-4 max-h-64 overflow-y-auto font-mono text-xs">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-bold text-white">📱 Debug Log</h3>
+                <button 
+                  onClick={() => setDebugLog([])}
+                  className="text-red-400 hover:text-red-300">
+                  Temizle
+                </button>
+              </div>
+              {debugLog.map((log, index) => (
+                <div key={index} className="mb-1 whitespace-pre-wrap break-words">
+                  {log}
+                </div>
+              ))}
             </div>
           )}
         </div>
